@@ -23,13 +23,15 @@ int main() {
         printf("errno: %d, %s\n", errno, strerror(errno));
     }
 
+    while(1) {
+        int n;
+        char buff[128];
+        fgets(buff, sizeof(buff), stdin);
 
-    ssize_t n;
-    const char* msg = "Hello my tcp friend!";
-    n = send(fd, msg, strlen(msg), 0);
-    printf("sent %ld bytes\n", n);
+        n = send(fd, buff, strlen(buff), 0);
+        printf("sent %d bytes\n", n);
 
-    char buff[64];
-    n = recv(fd, buff, n, 0);
-    printf("received %1$d bytes: %*s\n", (int)n, buff);
+        n = recv(fd, buff, n, 0);
+        printf("received %1$d bytes: %2$*1$s\n", (int)n, buff);
+    }
 }
