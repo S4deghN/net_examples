@@ -36,7 +36,7 @@ int main() {
             printf("error:%d: %s\n", errno, strerror(errno));
             break;
         }
-        printf("received %d bytes: %*s\n", n, n, buff);
+        printf("received %d bytes: %.*s\n", n, n, buff);
 
     }
 }

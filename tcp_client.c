@@ -5,8 +5,24 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
+#include <pthread.h>
 
+#define __unused __attribute__((__unused__))
 #define IP(a, b, c, d) (uint32_t)((a) << 24 | (b) << 16 | (c) << 8 | (d))
+
+void*
+stdin_h(void* args) {
+    int fd = *(int*)args;
+
+    while(1) {
+        char buff[128];
+        fgets(buff, sizeof(buff), stdin);
+
+        __unused int n = send(fd, buff, strlen(buff), 0);
+        // printf("sent %d bytes\n", n);
+    }
+    return NULL;
+}
 
 int main() {
     int ret;
@@ -21,17 +37,20 @@ int main() {
     ret = connect(fd, (void*)&addr, sizeof(addr));
     if (ret != 0) {
         printf("errno: %d, %s\n", errno, strerror(errno));
+        return 1;
+    }
+
+    pthread_t stdin_tr;
+    ret = pthread_create(&stdin_tr, NULL, &stdin_h, &fd);
+    if (ret != 0) {
+        printf("errno: %d, %s\n", errno, strerror(errno));
+        assert(ret!= 0);
     }
 
     while(1) {
-        int n;
         char buff[128];
-        fgets(buff, sizeof(buff), stdin);
-
-        n = send(fd, buff, strlen(buff), 0);
-        printf("sent %d bytes\n", n);
-
-        n = recv(fd, buff, n, 0);
-        printf("received %1$d bytes: %2$*1$s\n", (int)n, buff);
+        int n = recv(fd, buff, sizeof(buff), 0);
+        printf("%.*s", n, buff);
+        // printf("received %1$d bytes: %2$*1$s\n", n, buff);
     }
 }

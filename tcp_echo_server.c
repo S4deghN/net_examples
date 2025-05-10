@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <poll.h>
 #include <errno.h>
 #include <string.h>
 

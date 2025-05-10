@@ -36,7 +36,7 @@ int main() {
             printf("error: %d, %s\n", errno, strerror(errno));
             break;
         }
-        printf("received %d bytes from %x:%d: %*s\n", n,
+        printf("received %d bytes from %x:%d: %.*s\n", n,
             ntohl(c_addr.sin_addr.s_addr),
             ntohs(c_addr.sin_port), n, buff);
 
