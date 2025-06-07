@@ -1,1 +1,3 @@
 bin/
+*.o
+gede2.ini
