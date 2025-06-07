@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <assert.h>
@@ -50,7 +51,14 @@ int main() {
     while(1) {
         char buff[128];
         int n = recv(fd, buff, sizeof(buff), 0);
+        if (n <= 0) {
+            printf("peer diconnected!\n");
+            break;
+        }
         printf("%.*s", n, buff);
         // printf("received %1$d bytes: %2$*1$s\n", n, buff);
     }
+
+    ret = pthread_cancel(stdin_tr);
+    assert(ret == 0);
 }

@@ -1,7 +1,6 @@
 // TODO:
-// * [ ] make the msg_queue and actual queue. right now it is a stack and in
-// case of long messages they get broken down in wrong order and also get
-// buffered because of no \n.
+// * [x] make the msg_queue an actual queue. right now it is a stack and in
+// case of long messages they get broken down in wrong order.
 
 #include <unistd.h>
 #include <stdio.h>
@@ -15,6 +14,7 @@
 
 #define IP(a, b, c, d) (uint32_t)((a) << 24 | (b) << 16 | (c) << 8 | (d))
 #define countof(a) sizeof(a)/sizeof(a[0])
+#define sv_fmt(sv) (int)(sv).size, (char*)(sv).data
 
 struct fd_list {
     int data[128];
@@ -49,21 +49,35 @@ struct msg {
     int size;
 };
 
+// must be power of 2 for the queue implementation to work!
+constexpr int Q_size = 1 << 7;
+constexpr uint Q_mask = Q_size - 1;
 struct msg_queue {
-    struct msg data[128];
-    uint32_t count;
+    struct msg data[Q_size];
+    uint head;
+    uint tail;
     sem_t can_send;
     sem_t can_enqueue;
     pthread_mutex_t mutex;
 };
+
+void init_msg_queue(struct msg_queue* q) {
+    q->head = 0;
+    q->tail = 0;
+    assert(sem_init(&q->can_send, 0, 0) == 0);
+    assert(sem_init(&q->can_enqueue, 0, countof(q->data)) == 0);
+    assert(pthread_mutex_init(&q->mutex, NULL) == 0);
+}
 
 struct msg_queue msg_queue;
 struct fd_list fd_list;
 
 void* client_h(void* args) {
     int cfd = *(int*)args;
+    printf("created client handle for fd=%d\n", cfd);
+    struct msg msg;
+
     while(1) {
-        struct msg msg;
         msg.size = recv(cfd, msg.data, sizeof(msg.data), 0);
         if (msg.size <= 0) {
             break;
@@ -72,7 +86,7 @@ void* client_h(void* args) {
         sem_wait(&msg_queue.can_enqueue);
 
         pthread_mutex_lock(&msg_queue.mutex);
-        int index = msg_queue.count++;
+        uint index = (msg_queue.head++) & Q_mask;
         memcpy(msg_queue.data[index].data, msg.data, msg.size);
         msg_queue.data[index].size = msg.size;
         pthread_mutex_unlock(&msg_queue.mutex);
@@ -95,17 +109,16 @@ void* dispatcher_h(void* args) {
     while(1) {
         sem_wait(&msg_queue.can_send);
 
-        pthread_mutex_lock(&msg_queue.mutex);
-        int    msg_index = --msg_queue.count;
-        void*  data = msg_queue.data[msg_index].data;
-        size_t size = msg_queue.data[msg_index].size;
+        int index = msg_queue.tail++ & Q_mask;
+        void* data = msg_queue.data[index].data;
+        size_t size = msg_queue.data[index].size;
         for (int i = 0; i < fd_list.count; ++i) {
+            // printf("client:%d: sending: '%.*s'\n", fd_list.data[i], (int)size, (char*)data);
             int n = send(fd_list.data[i], data, size, 0);
-            if (n == -1) {
+            if (n <= 0) {
                 printf("client:%d: error: %s!\n", fd_list.data[i], strerror(errno));
             }
         }
-        pthread_mutex_unlock(&msg_queue.mutex);
 
         sem_post(&msg_queue.can_enqueue);
     }
@@ -115,10 +128,7 @@ void* dispatcher_h(void* args) {
 
 int main() {
     // initialize msg_queue
-    pthread_mutex_init(&msg_queue.mutex, NULL);
-    sem_init(&msg_queue.can_send, 0, 0);
-    sem_init(&msg_queue.can_enqueue, 0, countof(msg_queue.data));
-
+    init_msg_queue(&msg_queue);
 
     int ret;
     int sfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -150,7 +160,7 @@ int main() {
         fd_add(&fd_list, cfd);
 
         pthread_t tr;
-        pthread_create(&tr, NULL, client_h, &cfd);
+        pthread_create(&tr, NULL, client_h, &fd_list.data[fd_list.count - 1]);
     }
 
 }
